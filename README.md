@@ -267,19 +267,6 @@ server.resource(
 
 MIT License
 
-## 👤 개발자
-
-**SONG CHI HWAN** - chsong@suresofttech.com
-
-## 🚀 로드맵
-
-- [ ] KRA 공공 API 연동
-- [ ] 실시간 데이터 처리
-- [ ] 머신러닝 예측 모델 적용
-- [ ] 웹 대시보드 개발
-- [ ] 모바일 앱 연동
-- [ ] 고급 통계 분석 기능
-
 ---
 
 ⚠️ **중요**: 현재 버전은 프로토타입이며, 실제 KRA API 연동은 API 제공 후 구현 예정입니다.
