@@ -5,6 +5,10 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { parseString } from "xml2js";
 import { promisify } from "util";
+import dotenv from "dotenv";
+
+// .env 파일 로드
+dotenv.config();
 
 const parseXmlToJson = promisify(parseString);
 
@@ -73,25 +77,24 @@ interface RaceResultItem {
   chulNo: string;         // 출주번호
 }
 
-// KRA API 호출 함수
-async function callKRAApi(endpoint: string, params: Record<string, string>): Promise<any> {
-  if (!KRA_SERVICE_KEY) {
+// KRA API 호출 함수 - 테스트 가능하도록 분리
+export async function callKRAApi(endpoint: string, params: Record<string, string>): Promise<any> {
+  const apiKey = process.env.KRA_SERVICE_KEY || KRA_SERVICE_KEY;
+  
+  if (!apiKey) {
     throw new Error("KRA_SERVICE_KEY environment variable is required");
   }
 
   // 디버깅: API 키 상태 확인
   if (process.env.NODE_ENV !== 'production') {
     console.error(`🔧 API 호출 디버깅 - ${endpoint}:`);
-    console.error("- API 키 길이:", KRA_SERVICE_KEY.length);
-    console.error("- API 키 앞부분:", KRA_SERVICE_KEY.substring(0, 15) + "...");
+    console.error("- API 키 길이:", apiKey.length);
+    console.error("- API 키 앞부분:", apiKey.substring(0, 15) + "...");
   }
 
-  const searchParams = new URLSearchParams({
-    serviceKey: KRA_SERVICE_KEY,
-    ...params
-  });
-
-  const url = `${KRA_API_BASE_URL}${endpoint}?${searchParams}`;
+  const searchParams = new URLSearchParams(params);
+  // serviceKey는 이미 인코딩되어 있으므로 수동으로 추가
+  const url = `${KRA_API_BASE_URL}${endpoint}?serviceKey=${apiKey}&${searchParams}`;
   
   if (process.env.NODE_ENV !== 'production') {
     console.error("- 요청 URL 길이:", url.length);
@@ -149,8 +152,8 @@ async function callKRAApi(endpoint: string, params: Record<string, string>): Pro
   }
 }
 
-// 날짜 형식 검증 및 변환
-function validateAndFormatDate(dateStr: string): string {
+// 날짜 형식 검증 및 변환 - 테스트 가능하도록 export
+export function validateAndFormatDate(dateStr: string): string {
   const cleaned = dateStr.replace(/[-\/\s]/g, '');
   if (!/^\d{8}$/.test(cleaned)) {
     throw new Error("날짜는 YYYYMMDD 형식이어야 합니다 (예: 20240101)");
@@ -158,8 +161,8 @@ function validateAndFormatDate(dateStr: string): string {
   return cleaned;
 }
 
-// 경마장 코드 변환
-function getTrackCode(trackName?: string): string {
+// 경마장 코드 변환 - 테스트 가능하도록 export
+export function getTrackCode(trackName?: string): string {
   if (!trackName) return "1"; // 기본값: 서울
   
   const trackMap: Record<string, string> = {
