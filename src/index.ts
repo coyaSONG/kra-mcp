@@ -12,12 +12,53 @@ dotenv.config();
 
 const parseXmlToJson = promisify(parseString);
 
+// 구조화된 로깅 헬퍼 함수
+function logInfo(message: string, data?: any): void {
+  const timestamp = new Date().toISOString();
+  const logEntry = {
+    timestamp,
+    level: 'INFO',
+    message,
+    data
+  };
+  
+  if (process.env.NODE_ENV !== 'production') {
+    console.error(`ℹ️ [${timestamp}] ${message}`, data || '');
+  }
+}
+
+function logError(message: string, error?: any): void {
+  const timestamp = new Date().toISOString();
+  const logEntry = {
+    timestamp,
+    level: 'ERROR',
+    message,
+    error: error?.toString()
+  };
+  
+  console.error(`❌ [${timestamp}] ${message}`, error || '');
+}
+
+function logDebug(message: string, data?: any): void {
+  const timestamp = new Date().toISOString();
+  const logEntry = {
+    timestamp,
+    level: 'DEBUG',
+    message,
+    data
+  };
+  
+  if (process.env.NODE_ENV !== 'production') {
+    console.error(`🔧 [${timestamp}] ${message}`, data || '');
+  }
+}
+
 // 환경변수 디버깅 (개발모드에서만)
 if (process.env.NODE_ENV !== 'production') {
-  console.error("🔍 MCP 서버 환경변수 디버깅:");
-  console.error("- KRA_SERVICE_KEY 존재:", !!process.env.KRA_SERVICE_KEY);
-  console.error("- KRA_SERVICE_KEY 길이:", process.env.KRA_SERVICE_KEY?.length || 0);
-  console.error("- KRA_SERVICE_KEY 앞 10자:", process.env.KRA_SERVICE_KEY?.substring(0, 10));
+  logDebug("MCP 서버 환경변수 디버깅");
+  logDebug("- KRA_SERVICE_KEY 존재", !!process.env.KRA_SERVICE_KEY);
+  logDebug("- KRA_SERVICE_KEY 길이", process.env.KRA_SERVICE_KEY?.length || 0);
+  logDebug("- KRA_SERVICE_KEY 앞 10자", process.env.KRA_SERVICE_KEY?.substring(0, 10));
 }
 
 // KRA API 설정 - 올바른 엔드포인트로 업데이트
@@ -86,28 +127,25 @@ export async function callKRAApi(endpoint: string, params: Record<string, string
   }
 
   // 디버깅: API 키 상태 확인
-  if (process.env.NODE_ENV !== 'production') {
-    console.error(`🔧 API 호출 디버깅 - ${endpoint}:`);
-    console.error("- API 키 길이:", apiKey.length);
-    console.error("- API 키 앞부분:", apiKey.substring(0, 15) + "...");
-  }
+  logDebug(`API 호출 디버깅 - ${endpoint}`);
+  logDebug("API 키 길이", apiKey.length);
+  logDebug("API 키 앞부분", apiKey.substring(0, 15) + "...");
 
   const searchParams = new URLSearchParams(params);
   // serviceKey는 이미 인코딩되어 있으므로 수동으로 추가
   const url = `${KRA_API_BASE_URL}${endpoint}?serviceKey=${apiKey}&${searchParams}`;
   
-  if (process.env.NODE_ENV !== 'production') {
-    console.error("- 요청 URL 길이:", url.length);
-    console.error("- 파라미터:", JSON.stringify(params));
-  }
+  logDebug("요청 URL 길이", url.length);
+  logDebug("파라미터", JSON.stringify(params));
   
   try {
+    if (typeof fetch === 'undefined') {
+      throw new Error('글로벌 fetch 가 정의되지 않음');
+    }
     const response = await fetch(url);
     
-    if (process.env.NODE_ENV !== 'production') {
-      console.error("- 응답 상태:", response.status);
-      console.error("- 응답 타입:", response.headers.get('content-type'));
-    }
+    logDebug("응답 상태", response.status);
+    logDebug("응답 타입", response.headers.get('content-type'));
     
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -120,11 +158,9 @@ export async function callKRAApi(endpoint: string, params: Record<string, string
       // XML 응답을 JSON으로 파싱
       const xmlText = await response.text();
       
-      if (process.env.NODE_ENV !== 'production') {
-        console.error("- XML 응답 길이:", xmlText.length);
-        if (xmlText.includes('SERVICE_KEY_IS_NOT_REGISTERED_ERROR')) {
-          console.error("❌ API 키 등록 오류 발견!");
-        }
+      logDebug("XML 응답 길이", xmlText.length);
+      if (xmlText.includes('SERVICE_KEY_IS_NOT_REGISTERED_ERROR')) {
+        logError("API 키 등록 오류 발견!");
       }
       
       try {
@@ -406,6 +442,13 @@ function getTrackNameByCode(meetCode: string): string {
 const server = new McpServer({
   name: "KRA Racing Data Analysis Server",
   version: "1.0.0"
+}, {
+  capabilities: {
+    resources: {},
+    tools: {},
+    prompts: {},
+    logging: {}
+  }
 });
 
 /**
@@ -415,9 +458,18 @@ const server = new McpServer({
 // Race information analysis tool - 실제 API 연동
 server.tool("analyze-race",
   { 
-    raceDate: z.string().describe("경주일자 (YYYYMMDD 형식, 예: 20240220)"),
-    raceNumber: z.number().optional().describe("경주번호 (1-12, 생략시 모든 경주)"),
-    trackCode: z.string().optional().describe("경마장 (서울/제주/부산 또는 seoul/jeju/busan)")
+    raceDate: z.string()
+      .regex(/^\d{8}$/, "날짜는 YYYYMMDD 형식이어야 합니다")
+      .describe("경주일자 (YYYYMMDD 형식, 예: 20240220)"),
+    raceNumber: z.number()
+      .int("경주번호는 정수여야 합니다")
+      .min(1, "경주번호는 1 이상이어야 합니다")
+      .max(12, "경주번호는 12 이하여야 합니다")
+      .optional()
+      .describe("경주번호 (1-12, 생략시 모든 경주)"),
+    trackCode: z.enum(["서울", "제주", "부산", "seoul", "jeju", "busan"])
+      .optional()
+      .describe("경마장 (서울/제주/부산 또는 seoul/jeju/busan)")
   },
   async ({ raceDate, raceNumber, trackCode }) => {
     try {
@@ -451,7 +503,8 @@ server.tool("analyze-race",
         content: [{ 
           type: "text", 
           text: `❌ 경주 분석 중 오류 발생: ${error instanceof Error ? error.message : String(error)}\n\n💡 확인사항:\n- KRA_SERVICE_KEY 환경변수 설정\n- 날짜 형식 (YYYYMMDD)\n- 인터넷 연결 상태` 
-        }]
+        }],
+        isError: true
       };
     }
   }
@@ -460,8 +513,14 @@ server.tool("analyze-race",
 // Horse performance analysis tool - 실제 API 연동으로 개선
 server.tool("analyze-horse-performance",
   { 
-    horseName: z.string().describe("말 이름 (한글 또는 영문)"),
-    period: z.string().optional().default("6months").describe("분석 기간 (예: 6months, 1year)")
+    horseName: z.string()
+      .min(1, "말 이름은 비어있을 수 없습니다")
+      .max(50, "말 이름이 너무 깁니다")
+      .describe("말 이름 (한글 또는 영문)"),
+    period: z.enum(["3months", "6months", "1year", "2years"])
+      .optional()
+      .default("6months")
+      .describe("분석 기간 (3months/6months/1year/2years)")
   },
   async ({ horseName, period }) => {
     try {
@@ -501,7 +560,8 @@ server.tool("analyze-horse-performance",
         content: [{ 
           type: "text", 
           text: `❌ 말 성적 분석 중 오류 발생: ${error instanceof Error ? error.message : String(error)}` 
-        }]
+        }],
+        isError: true
       };
     }
   }
@@ -510,8 +570,16 @@ server.tool("analyze-horse-performance",
 // Jockey statistics tool - 실제 API 연동으로 개선
 server.tool("get-jockey-stats",
   { 
-    jockeyName: z.string().describe("기수명 (한글 또는 영문)"),
-    year: z.number().optional().describe("조회 년도 (예: 2024, 생략시 최근 데이터)")
+    jockeyName: z.string()
+      .min(1, "기수명은 비어있을 수 없습니다")
+      .max(30, "기수명이 너무 깁니다")
+      .describe("기수명 (한글 또는 영문)"),
+    year: z.number()
+      .int("년도는 정수여야 합니다")
+      .min(2020, "너무 오래된 데이터입니다")
+      .max(new Date().getFullYear(), "미래 년도는 조회할 수 없습니다")
+      .optional()
+      .describe("조회 년도 (예: 2024, 생략시 최근 데이터)")
   },
   async ({ jockeyName, year }) => {
     try {
@@ -538,7 +606,8 @@ server.tool("get-jockey-stats",
         content: [{ 
           type: "text", 
           text: `❌ 기수 통계 조회 중 오류 발생: ${error instanceof Error ? error.message : String(error)}` 
-        }]
+        }],
+        isError: true
       };
     }
   }
@@ -547,9 +616,18 @@ server.tool("get-jockey-stats",
 // Odds analysis tool - 실제 API 연동으로 개선
 server.tool("analyze-odds",
   { 
-    raceDate: z.string().describe("경주일자 (YYYYMMDD)"),
-    raceNumber: z.number().describe("경주번호"),
-    betType: z.enum(["win", "place", "quinella", "exacta", "trifecta"]).optional().default("win").describe("마권 종류")
+    raceDate: z.string()
+      .regex(/^\d{8}$/, "날짜는 YYYYMMDD 형식이어야 합니다")
+      .describe("경주일자 (YYYYMMDD)"),
+    raceNumber: z.number()
+      .int("경주번호는 정수여야 합니다")
+      .min(1, "경주번호는 1 이상이어야 합니다")
+      .max(12, "경주번호는 12 이하여야 합니다")
+      .describe("경주번호"),
+    betType: z.enum(["win", "place", "quinella", "exacta", "trifecta"])
+      .optional()
+      .default("win")
+      .describe("마권 종류")
   },
   async ({ raceDate, raceNumber, betType }) => {
     try {
@@ -580,7 +658,8 @@ server.tool("analyze-odds",
         content: [{ 
           type: "text", 
           text: `❌ 배당률 분석 중 오류 발생: ${error instanceof Error ? error.message : String(error)}` 
-        }]
+        }],
+        isError: true
       };
     }
   }
@@ -589,9 +668,14 @@ server.tool("analyze-odds",
 // Track condition impact analysis - 실제 API 연동으로 개선
 server.tool("analyze-track-condition",
   { 
-    trackCode: z.string().describe("경마장 코드 (서울/제주/부산)"),
-    date: z.string().describe("조회 날짜 (YYYYMMDD)"),
-    weather: z.string().optional().describe("날씨 조건 (맑음/흐림/비 등)")
+    trackCode: z.enum(["서울", "제주", "부산", "seoul", "jeju", "busan"])
+      .describe("경마장 코드 (서울/제주/부산)"),
+    date: z.string()
+      .regex(/^\d{8}$/, "날짜는 YYYYMMDD 형식이어야 합니다")
+      .describe("조회 날짜 (YYYYMMDD)"),
+    weather: z.enum(["맑음", "흐림", "비", "눈", "바람"])
+      .optional()
+      .describe("날씨 조건 (맑음/흐림/비/눈/바람)")
   },
   async ({ trackCode, date, weather }) => {
     try {
@@ -625,7 +709,8 @@ server.tool("analyze-track-condition",
         content: [{ 
           type: "text", 
           text: `❌ 주로 상태 분석 중 오류 발생: ${error instanceof Error ? error.message : String(error)}` 
-        }]
+        }],
+        isError: true
       };
     }
   }
@@ -664,7 +749,16 @@ server.resource(
 // Horse database resource
 server.resource(
   "horse-info",
-  new ResourceTemplate("horses://{horseName}", { list: undefined }),
+  new ResourceTemplate("horses://{horseName}", {
+    list: () => ({
+      resources: [
+        { uri: "horses://우승마", name: "우승마", description: "Horse performance data for 우승마" },
+        { uri: "horses://번개", name: "번개", description: "Horse performance data for 번개" },
+        { uri: "horses://전설", name: "전설", description: "Horse performance data for 전설" },
+        { uri: "horses://청룡", name: "청룡", description: "Horse performance data for 청룡" }
+      ]
+    })
+  }),
   async (uri, { horseName }) => ({
     contents: [{
       uri: uri.href,
@@ -696,9 +790,9 @@ server.resource(
   new ResourceTemplate("tracks://{trackCode}", {
     list: () => ({
       resources: [
-        { uri: "tracks://seoul", name: "서울경마공원", description: "Seoul Race Park" },
-        { uri: "tracks://busan", name: "부산경남경마공원", description: "Busan Gyeongnam Race Park" },
-        { uri: "tracks://jeju", name: "제주경마공원", description: "Jeju Race Park" }
+        { uri: "tracks://seoul", name: "서울경마공원", description: "Seoul Race Park", mimeType: "application/json" },
+        { uri: "tracks://busan", name: "부산경남경마공원", description: "Busan Gyeongnam Race Park", mimeType: "application/json" },
+        { uri: "tracks://jeju", name: "제주경마공원", description: "Jeju Race Park", mimeType: "application/json" }
       ]
     })
   }),
@@ -855,31 +949,24 @@ process.on('unhandledRejection', (reason, promise) => {
  * Start the KRA Racing Data Analysis Server
  */
 async function main() {
-  // 프로덕션 환경에서는 로그 출력 최소화
-  const isDebug = process.env.NODE_ENV === 'development';
-  
-  if (isDebug) {
-    console.error('🏇 Starting KRA Racing Data Analysis Server...');
-    console.error('🇰🇷 한국 마사회 경마 데이터 분석 서버 시작...');
-  }
-  
   try {
+    logInfo('🏇 Starting KRA Racing Data Analysis Server...');
+    logInfo('🇰🇷 한국 마사회 경마 데이터 분석 서버 시작...');
+  
     // Create stdio transport for communication
     const transport = new StdioServerTransport();
     
     // Connect the server to the transport
     await server.connect(transport);
     
-    if (isDebug) {
-      console.error('✅ KRA Server connected and ready!');
-      console.error('🔧 Available tools: analyze-race, analyze-horse-performance, get-jockey-stats, analyze-odds, analyze-track-condition');
-      console.error('📁 Available resources: schedule://{date}, horses://{horseName}, tracks://{trackCode}, config://kra-api');
-      console.error('💬 Available prompts: predict-race, horse-performance-report, market-analysis');
-      console.error('⚠️  Note: API integration with KRA public API is pending');
-    }
+    logInfo('✅ KRA Server connected and ready!');
+    logInfo('🔧 Available tools: analyze-race, analyze-horse-performance, get-jockey-stats, analyze-odds, analyze-track-condition');
+    logInfo('📁 Available resources: schedule://{date}, horses://{horseName}, tracks://{trackCode}, config://kra-api');
+    logInfo('💬 Available prompts: predict-race, horse-performance-report, market-analysis');
+    logInfo('🔗 Integrated with KRA public API');
     
   } catch (error) {
-    console.error('❌ Failed to start KRA server:', error);
+    logError('Failed to start KRA server', error);
     process.exit(1);
   }
 }
