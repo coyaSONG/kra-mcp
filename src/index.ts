@@ -118,6 +118,20 @@ interface RaceResultItem {
   chulNo: string;         // 출주번호
 }
 
+interface JockeyInfoItem {
+  jkName: string;         // 기수명
+  jkNameEn: string;       // 영문기수명
+  jkNo: string;           // 기수번호
+  meet: string;           // 소속경마장 (1:서울, 2:제주, 3:부산)
+  jkGroup: string;        // 소속조
+  firstCnt: string;       // 통산 1위횟수
+  secondCnt: string;      // 통산 2위횟수
+  thirdCnt: string;       // 통산 3위횟수
+  totalCnt: string;       // 총 출전횟수
+  winRate: string;        // 승률
+  placeRate: string;      // 연대율
+}
+
 // KRA API 호출 함수 - 테스트 가능하도록 분리
 export async function callKRAApi(endpoint: string, params: Record<string, string>): Promise<any> {
   const apiKey = process.env.KRA_SERVICE_KEY || KRA_SERVICE_KEY;
@@ -131,8 +145,8 @@ export async function callKRAApi(endpoint: string, params: Record<string, string
   logDebug("API 키 길이", apiKey.length);
   logDebug("API 키 앞부분", apiKey.substring(0, 15) + "...");
 
+  // serviceKey를 수동으로 추가하여 이중 인코딩 방지
   const searchParams = new URLSearchParams(params);
-  // serviceKey는 이미 인코딩되어 있으므로 수동으로 추가
   const url = `${KRA_API_BASE_URL}${endpoint}?serviceKey=${apiKey}&${searchParams}`;
   
   logDebug("요청 URL 길이", url.length);
@@ -159,8 +173,20 @@ export async function callKRAApi(endpoint: string, params: Record<string, string
       const xmlText = await response.text();
       
       logDebug("XML 응답 길이", xmlText.length);
+      
+      // 공공데이터 API 에러코드 감지
       if (xmlText.includes('SERVICE_KEY_IS_NOT_REGISTERED_ERROR')) {
         logError("API 키 등록 오류 발견!");
+        throw new Error("등록되지 않은 서비스키입니다. 공공데이터포털에서 API 신청 및 승인을 확인해주세요.");
+      }
+      if (xmlText.includes('DEADLINE_HAS_EXPIRED_ERROR')) {
+        throw new Error("기한만료된 서비스키입니다. 공공데이터포털에서 갱신해주세요.");
+      }
+      if (xmlText.includes('LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR')) {
+        throw new Error("서비스 요청제한횟수를 초과했습니다. 잠시 후 다시 시도해주세요.");
+      }
+      if (xmlText.includes('UNREGISTERED_IP_ERROR')) {
+        throw new Error("등록되지 않은 IP입니다. 공공데이터포털에서 IP를 등록해주세요.");
       }
       
       try {
@@ -194,6 +220,22 @@ export function validateAndFormatDate(dateStr: string): string {
   if (!/^\d{8}$/.test(cleaned)) {
     throw new Error("날짜는 YYYYMMDD 형식이어야 합니다 (예: 20240101)");
   }
+  
+  // 날짜 유효성 검증
+  const year = parseInt(cleaned.slice(0, 4));
+  const month = parseInt(cleaned.slice(4, 6));
+  const day = parseInt(cleaned.slice(6, 8));
+  
+  if (year < 2020 || year > new Date().getFullYear() + 1) {
+    throw new Error("유효하지 않은 년도입니다 (2020년 이후만 지원)");
+  }
+  if (month < 1 || month > 12) {
+    throw new Error("유효하지 않은 월입니다 (01-12)");
+  }
+  if (day < 1 || day > 31) {
+    throw new Error("유효하지 않은 일입니다 (01-31)");
+  }
+  
   return cleaned;
 }
 
@@ -207,6 +249,7 @@ export function getTrackCode(trackName?: string): string {
     "제주": "2", 
     "jeju": "2",
     "부산": "3",
+    "부경": "3",
     "부산경남": "3",
     "busan": "3"
   };
@@ -360,6 +403,65 @@ function formatHorsePerformanceData(data: any, horseName: string): string {
   return result;
 }
 
+// 기수 정보 포맷팅 함수
+function formatJockeyInfoData(data: any, jockeyName?: string): string {
+  if (!data || !data.response) {
+    return `❌ 기수 정보 데이터를 찾을 수 없습니다.`;
+  }
+
+  const { response } = data;
+  
+  if (response.header.resultCode !== "00") {
+    return `❌ API 오류: ${response.header.resultMsg}`;
+  }
+
+  if (!response.body || !response.body.items) {
+    return `📝 기수 정보가 없습니다.`;
+  }
+
+  // API 응답 구조에 맞게 items 추출
+  let items;
+  if (response.body.items.item) {
+    items = Array.isArray(response.body.items.item) ? response.body.items.item : [response.body.items.item];
+  } else if (Array.isArray(response.body.items)) {
+    items = response.body.items;
+  } else {
+    items = [response.body.items];
+  }
+
+  // 특정 기수 검색시 필터링
+  if (jockeyName) {
+    items = items.filter((item: any) => 
+      item.jkName && (
+        item.jkName.includes(jockeyName) || 
+        jockeyName.includes(item.jkName) ||
+        item.jkNameEn?.toLowerCase().includes(jockeyName.toLowerCase())
+      )
+    );
+    
+    if (items.length === 0) {
+      return `📝 "${jockeyName}" 기수를 찾을 수 없습니다.`;
+    }
+  }
+
+  let result = `🏇 **기수 정보** ${jockeyName ? `- "${jockeyName}"` : ''}\n\n`;
+  
+  items.forEach((jockey: any, index: number) => {
+    const trackName = getTrackNameByCode(jockey.meet);
+    const winRate = parseFloat(jockey.winRate || "0");
+    const placeRate = parseFloat(jockey.placeRate || "0");
+    
+    result += `**${index + 1}. ${jockey.jkName}** (${jockey.jkNameEn || '영문명 없음'})\n`;
+    result += `• 기수번호: ${jockey.jkNo}\n`;
+    result += `• 소속: ${trackName} ${jockey.jkGroup || ''}조\n`;
+    result += `• 통산성적: ${jockey.firstCnt || 0}승 ${jockey.secondCnt || 0}준 ${jockey.thirdCnt || 0}삼\n`;
+    result += `• 총 출전: ${jockey.totalCnt || 0}회\n`;
+    result += `• 승률: ${winRate.toFixed(1)}% | 연대율: ${placeRate.toFixed(1)}%\n\n`;
+  });
+
+  return result;
+}
+
 function formatJockeyStatsData(data: any, jockeyName: string): string {
   if (!data || !data.response) {
     return `❌ "${jockeyName}" 기수의 통계 데이터를 찾을 수 없습니다.`;
@@ -467,9 +569,9 @@ server.tool("analyze-race",
       .max(12, "경주번호는 12 이하여야 합니다")
       .optional()
       .describe("경주번호 (1-12, 생략시 모든 경주)"),
-    trackCode: z.enum(["서울", "제주", "부산", "seoul", "jeju", "busan"])
+    trackCode: z.enum(["서울", "제주", "부산", "부경", "seoul", "jeju", "busan"])
       .optional()
-      .describe("경마장 (서울/제주/부산 또는 seoul/jeju/busan)")
+      .describe("경마장 (서울/제주/부산/부경 또는 seoul/jeju/busan)")
   },
   async ({ raceDate, raceNumber, trackCode }) => {
     try {
@@ -528,18 +630,26 @@ server.tool("analyze-horse-performance",
       const endDate = new Date();
       const startDate = new Date();
       
-      if (period === "1year") {
-        startDate.setFullYear(startDate.getFullYear() - 1);
-      } else {
-        startDate.setMonth(startDate.getMonth() - 6);
+      // 기간별 설정
+      switch (period) {
+        case "3months":
+          startDate.setMonth(startDate.getMonth() - 3);
+          break;
+        case "1year":
+          startDate.setFullYear(startDate.getFullYear() - 1);
+          break;
+        case "2years":
+          startDate.setFullYear(startDate.getFullYear() - 2);
+          break;
+        default: // 6months
+          startDate.setMonth(startDate.getMonth() - 6);
       }
       
-      const startDateStr = startDate.toISOString().slice(0, 10).replace(/-/g, '');
       const endDateStr = endDate.toISOString().slice(0, 10).replace(/-/g, '');
       
-      // 기간별로 데이터 조회 (월별로 나누어 조회)
+      // 최근 월 데이터로 조회 (numOfRows 증가)
       const params = {
-        numOfRows: "100",
+        numOfRows: "200", // 더 많은 데이터 조회
         pageNo: "1",
         rc_month: endDateStr.slice(0, 6) // 최근 월 데이터
       };
@@ -584,10 +694,16 @@ server.tool("get-jockey-stats",
   async ({ jockeyName, year }) => {
     try {
       const targetYear = year || new Date().getFullYear();
+      
+      // rc_year와 rc_month를 함께 활용
+      const currentMonth = new Date().getMonth() + 1;
       const params = {
-        numOfRows: "100",
+        numOfRows: "200", // 더 많은 데이터 조회
         pageNo: "1",
-        rc_year: targetYear.toString()
+        rc_year: targetYear.toString(),
+        rc_month: targetYear === new Date().getFullYear() ? 
+          `${targetYear}${currentMonth.toString().padStart(2, '0')}` : 
+          `${targetYear}12` // 과거 년도는 12월까지
       };
 
       const response = await callKRAApi("/RaceDetailResult_1", params);
@@ -606,6 +722,95 @@ server.tool("get-jockey-stats",
         content: [{ 
           type: "text", 
           text: `❌ 기수 통계 조회 중 오류 발생: ${error instanceof Error ? error.message : String(error)}` 
+        }],
+        isError: true
+      };
+    }
+  }
+);
+
+// Jockey information tool - 기수 정보 API 연동
+server.tool("get-jockey-info",
+  { 
+    jockeyName: z.string()
+      .min(1, "기수명은 비어있을 수 없습니다")
+      .max(30, "기수명이 너무 깁니다")
+      .optional()
+      .describe("기수명 (한글 또는 영문, 생략시 전체 조회)"),
+    jockeyNumber: z.string()
+      .optional()
+      .describe("기수번호"),
+    trackCode: z.enum(["서울", "제주", "부산", "부경", "seoul", "jeju", "busan"])
+      .optional()
+      .describe("경마장 (서울/제주/부산/부경)")
+  },
+  async ({ jockeyName, jockeyNumber, trackCode }) => {
+    try {
+      const params: Record<string, string> = {
+        numOfRows: "100",
+        pageNo: "1"
+      };
+      
+      if (jockeyName) {
+        params.jk_name = jockeyName;
+      }
+      
+      if (jockeyNumber) {
+        params.jk_no = jockeyNumber;
+      }
+      
+      if (trackCode) {
+        params.meet = getTrackCode(trackCode);
+      }
+
+      // 기수 정보는 API12_1 사용
+      const jockeyApiUrl = "https://apis.data.go.kr/B551015/API12_1/jockeyInfo_1";
+      const apiKey = process.env.KRA_SERVICE_KEY || KRA_SERVICE_KEY;
+      
+      if (!apiKey) {
+        throw new Error("KRA_SERVICE_KEY environment variable is required");
+      }
+
+      const searchParams = new URLSearchParams(params);
+      const url = `${jockeyApiUrl}?serviceKey=${apiKey}&${searchParams}`;
+      
+      const fetchResponse = await fetch(url);
+      if (!fetchResponse.ok) {
+        throw new Error(`HTTP ${fetchResponse.status}: ${fetchResponse.statusText}`);
+      }
+      
+      const contentType = fetchResponse.headers.get('content-type');
+      let response;
+      if (contentType?.includes('application/json')) {
+        response = await fetchResponse.json();
+      } else {
+        const xmlText = await fetchResponse.text();
+        const { parseString } = await import('xml2js');
+        response = await new Promise((resolve, reject) => {
+          parseString(xmlText, {
+            explicitArray: false,
+            ignoreAttrs: true,
+            trim: true
+          }, (err: any, result: any) => {
+            if (err) reject(err);
+            else resolve(result);
+          });
+        });
+      }
+      
+      const formattedResult = formatJockeyInfoData(response, jockeyName);
+      
+      return {
+        content: [{ 
+          type: "text", 
+          text: formattedResult
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{ 
+          type: "text", 
+          text: `❌ 기수 정보 조회 중 오류 발생: ${error instanceof Error ? error.message : String(error)}` 
         }],
         isError: true
       };
@@ -634,10 +839,11 @@ server.tool("analyze-odds",
       const formattedDate = validateAndFormatDate(raceDate);
       
       const params = {
-        numOfRows: "20",
+        numOfRows: "50", // 배당률 분석용 충분한 데이터
         pageNo: "1",
         rc_date: formattedDate,
-        rc_no: raceNumber.toString()
+        rc_no: raceNumber.toString(),
+        meet: "1" // 기본값: 서울 (필요시 파라미터로 추가 가능)
       };
 
       const response = await callKRAApi("/RaceDetailResult_1", params);
@@ -668,8 +874,8 @@ server.tool("analyze-odds",
 // Track condition impact analysis - 실제 API 연동으로 개선
 server.tool("analyze-track-condition",
   { 
-    trackCode: z.enum(["서울", "제주", "부산", "seoul", "jeju", "busan"])
-      .describe("경마장 코드 (서울/제주/부산)"),
+    trackCode: z.enum(["서울", "제주", "부산", "부경", "seoul", "jeju", "busan"])
+      .describe("경마장 코드 (서울/제주/부산/부경)"),
     date: z.string()
       .regex(/^\d{8}$/, "날짜는 YYYYMMDD 형식이어야 합니다")
       .describe("조회 날짜 (YYYYMMDD)"),
@@ -960,7 +1166,7 @@ async function main() {
     await server.connect(transport);
     
     logInfo('✅ KRA Server connected and ready!');
-    logInfo('🔧 Available tools: analyze-race, analyze-horse-performance, get-jockey-stats, analyze-odds, analyze-track-condition');
+    logInfo('🔧 Available tools: analyze-race, analyze-horse-performance, get-jockey-stats, get-jockey-info, analyze-odds, analyze-track-condition');
     logInfo('📁 Available resources: schedule://{date}, horses://{horseName}, tracks://{trackCode}, config://kra-api');
     logInfo('💬 Available prompts: predict-race, horse-performance-report, market-analysis');
     logInfo('🔗 Integrated with KRA public API');
