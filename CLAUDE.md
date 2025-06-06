@@ -75,13 +75,43 @@ The server validates this key exists and provides debugging information in devel
 - Graceful error messages with troubleshooting hints
 - API-specific error detection (e.g., service key registration errors)
 
+### Project File Structure
+
+```
+/
+├── src/                          # Source code
+│   └── index.ts                  # Main MCP server implementation
+├── tests/                        # Jest unit tests
+│   └── api.test.ts              # API functionality tests
+├── scripts/                      # Development and testing scripts
+│   ├── debug-env.ts             # Environment variable debugging utility
+│   ├── test-api12.js            # API12_1 (jockey info) endpoint test
+│   ├── test-api299.js           # API299 (race statistics) endpoint test
+│   ├── test-api299-function.js  # API299 function integration test
+│   ├── test-final-json.js       # Final JSON-only implementation test
+│   ├── test-json-responses.js   # JSON response format validation
+│   └── test-response-types.js   # XML vs JSON response type comparison
+├── examples/                     # API response samples
+│   ├── api12_response.json      # Sample API12_1 JSON response
+│   ├── api12_response.xml       # Sample API12_1 XML response
+│   ├── api214_response.json     # Sample API214_1 JSON response
+│   ├── api214_response.xml      # Sample API214_1 XML response
+│   ├── api299_response.json     # Sample API299 JSON response
+│   └── api299_response.xml      # Sample API299 XML response
+├── dist/                         # Compiled JavaScript output
+├── coverage/                     # Test coverage reports
+├── docs/
+│   └── KRA_PUBLIC_API_GUIDE.md  # Comprehensive KRA API documentation
+└── [config files]               # package.json, tsconfig.json, etc.
+```
+
 ### Testing Strategy
 
 The project uses Jest with TypeScript support for comprehensive testing:
-- API utility function testing (validation, formatting)
-- Mock-based API integration testing  
-- Error scenario testing (network errors, malformed responses)
-- Environment variable handling validation
+- **Unit Tests (tests/)**: API utility function testing, validation, formatting
+- **Integration Scripts (scripts/)**: Real API endpoint testing and debugging
+- **Mock Testing**: Network errors, malformed responses, environment validation
+- **Response Samples (examples/)**: Both JSON and XML format preservation
 
 ### MCP Client Integration
 
@@ -97,10 +127,44 @@ Configure in MCP clients (e.g., Cursor IDE) by adding to `mcp.json`:
 }
 ```
 
+### API Response Format Evolution
+
+**Current Implementation (JSON-only):**
+- All APIs use `_type=json` parameter for native JSON responses
+- Eliminates XML parsing overhead and complexity
+- Provides proper type safety (numbers as numbers, not strings)
+- Significantly improved performance and maintainability
+
+**Deprecated (XML parsing):**
+- Previous XML-based implementation removed for simplicity
+- xml2js dependency eliminated
+- XML sample responses preserved in examples/ for reference
+
 ## Development Notes
 
 - The project uses ES modules (`"type": "module"` in package.json)
 - TypeScript configured for ES2022 target with ESNext modules
-- XML responses are automatically converted to JSON using xml2js
-- API responses are cached and processed to extract relevant racing data
+- **JSON-first approach**: All KRA APIs called with `_type=json` parameter
+- Native JSON parsing eliminates xml2js dependency and improves performance
+- API responses are processed to extract relevant racing data
 - All user-facing text is in Korean to match the target audience
+
+## Development Scripts Usage
+
+**Environment Debugging:**
+```bash
+node scripts/debug-env.ts  # Check API key and environment setup
+```
+
+**API Testing:**
+```bash
+node scripts/test-final-json.js     # Test current JSON implementation
+node scripts/test-api12.js          # Test jockey info API
+node scripts/test-api299.js         # Test race statistics API
+```
+
+**Response Analysis:**
+```bash
+node scripts/test-json-responses.js    # Generate JSON response samples
+node scripts/test-response-types.js    # Compare XML vs JSON formats
+```
