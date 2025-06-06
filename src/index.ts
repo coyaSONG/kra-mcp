@@ -1026,56 +1026,6 @@ server.tool("analyze-odds",
   }
 );
 
-// Track condition impact analysis - 실제 API 연동으로 개선
-server.tool("analyze-track-condition",
-  { 
-    trackCode: z.enum(["서울", "제주", "부산", "부경", "seoul", "jeju", "busan"])
-      .describe("경마장 코드 (서울/제주/부산/부경)"),
-    date: z.string()
-      .regex(/^\d{8}$/, "날짜는 YYYYMMDD 형식이어야 합니다")
-      .describe("조회 날짜 (YYYYMMDD)"),
-    weather: z.enum(["맑음", "흐림", "비", "눈", "바람"])
-      .optional()
-      .describe("날씨 조건 (맑음/흐림/비/눈/바람)")
-  },
-  async ({ trackCode, date, weather }) => {
-    try {
-      const formattedDate = validateAndFormatDate(date);
-      const meet = getTrackCode(trackCode);
-      
-      const params = {
-        numOfRows: "50",
-        pageNo: "1",
-        meet: meet,
-        rc_date: formattedDate
-      };
-
-      const response = await callKRAApi("/RaceDetailResult_1", params);
-      
-      let conditionText = `🌤️ 주로 상태 분석: ${trackCode} (${formattedDate})\n`;
-      if (weather) {
-        conditionText += `☀️ 날씨: ${weather}\n`;
-      }
-      conditionText += `\n📊 해당일 경주 데이터:\n${JSON.stringify(response, null, 2)}\n\n`;
-      conditionText += `💡 주로 상태와 날씨가 경주 기록에 미치는 영향을 분석합니다.`;
-      
-      return {
-        content: [{ 
-          type: "text", 
-          text: conditionText
-        }]
-      };
-    } catch (error) {
-      return {
-        content: [{ 
-          type: "text", 
-          text: `❌ 주로 상태 분석 중 오류 발생: ${error instanceof Error ? error.message : String(error)}` 
-        }],
-        isError: true
-      };
-    }
-  }
-);
 
 /**
  * Resources - Racing data and information sources
@@ -1321,7 +1271,7 @@ async function main() {
     await server.connect(transport);
     
     logInfo('✅ KRA Server connected and ready!');
-    logInfo('🔧 Available tools: analyze-race, analyze-horse-performance, get-jockey-stats, get-jockey-info, analyze-odds, analyze-track-condition');
+    logInfo('🔧 Available tools: analyze-race, analyze-horse-performance, get-jockey-stats, get-jockey-info, analyze-odds');
     logInfo('📁 Available resources: schedule://{date}, horses://{horseName}, tracks://{trackCode}, config://kra-api');
     logInfo('💬 Available prompts: predict-race, horse-performance-report, market-analysis');
     logInfo('🔗 Integrated with KRA public API');
