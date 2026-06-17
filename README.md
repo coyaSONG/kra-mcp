@@ -66,7 +66,7 @@
 ```bash
 # 저장소 클론
 git clone <repository-url>
-cd kra-racing-data-mcp-server
+cd kra-mcp
 
 # 의존성 설치
 npm install
@@ -104,7 +104,8 @@ npm start
   "mcpServers": {
     "kra-racing-analysis": {
       "command": "npx",
-      "args": ["tsx", "C:/Users/SONG/kra-racing-data-mcp-server/src/index.ts"]
+      "args": ["tsx", "src/index.ts"],
+      "cwd": "/path/to/kra-mcp"
     }
   }
 }
@@ -116,7 +117,8 @@ npm start
   "mcpServers": {
     "kra-racing-analysis": {
       "command": "node",
-      "args": ["C:/Users/SONG/kra-racing-data-mcp-server/dist/index.js"]
+      "args": ["dist/index.js"],
+      "cwd": "/path/to/kra-mcp"
     }
   }
 }
@@ -143,7 +145,7 @@ analyze-horse-performance --horseName="우승마" --period="1year"
 ## 📂 프로젝트 구조
 
 ```
-kra-racing-data-mcp-server/
+kra-mcp/
 ├── src/
 │   └── index.ts              # 메인 서버 파일
 ├── dist/                     # 빌드된 JavaScript 파일
