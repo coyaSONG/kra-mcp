@@ -134,7 +134,7 @@ export async function callKRAAPI299(endpoint: string, params: Record<string, str
   const apiKey = process.env.KRA_SERVICE_KEY || KRA_SERVICE_KEY;
   
   if (!apiKey) {
-    throw new Error("KRA_SERVICE_KEY environment variable is required");
+    throw new Error("KRA API 호출 실패: KRA_SERVICE_KEY environment variable is required");
   }
 
   // 디버깅: API 키 상태 확인
@@ -193,7 +193,7 @@ export async function callKRAApi(endpoint: string, params: Record<string, string
   const apiKey = process.env.KRA_SERVICE_KEY || KRA_SERVICE_KEY;
   
   if (!apiKey) {
-    throw new Error("KRA_SERVICE_KEY environment variable is required");
+    throw new Error("KRA API 호출 실패: KRA_SERVICE_KEY environment variable is required");
   }
 
   // 디버깅: API 키 상태 확인
@@ -939,7 +939,7 @@ server.tool("get-jockey-info",
       const apiKey = process.env.KRA_SERVICE_KEY || KRA_SERVICE_KEY;
       
       if (!apiKey) {
-        throw new Error("KRA_SERVICE_KEY environment variable is required");
+        throw new Error("KRA API 호출 실패: KRA_SERVICE_KEY environment variable is required");
       }
 
       const searchParams = new URLSearchParams({...params, _type: 'json'});
