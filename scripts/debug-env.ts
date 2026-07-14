@@ -8,8 +8,6 @@ console.log("📋 환경변수 정보:");
 console.log("- NODE_ENV:", process.env.NODE_ENV);
 console.log("- KRA_SERVICE_KEY 존재:", !!process.env.KRA_SERVICE_KEY);
 console.log("- KRA_SERVICE_KEY 길이:", process.env.KRA_SERVICE_KEY?.length || 0);
-console.log("- KRA_SERVICE_KEY 앞 10자:", process.env.KRA_SERVICE_KEY?.substring(0, 10));
-console.log("- KRA_SERVICE_KEY 뒤 10자:", process.env.KRA_SERVICE_KEY?.slice(-10));
 
 // 다른 환경변수들도 확인
 console.log("\n🌍 기타 환경변수:");
@@ -20,9 +18,13 @@ console.log("- PATH 앞부분:", process.env.PATH?.substring(0, 100));
 // API 키가 URL 인코딩되어 있는지 확인
 const apiKey = process.env.KRA_SERVICE_KEY || "";
 console.log("\n🔧 API 키 분석:");
-console.log("- 원본 키:", apiKey.substring(0, 20) + "...");
-console.log("- URL 디코딩된 키:", decodeURIComponent(apiKey).substring(0, 20) + "...");
-console.log("- 인코딩 여부:", apiKey !== decodeURIComponent(apiKey) ? "인코딩됨" : "원본");
+let isEncoded = false;
+try {
+  isEncoded = apiKey !== decodeURIComponent(apiKey);
+} catch {
+  console.log("- 인코딩 상태: 올바르지 않은 URL 인코딩");
+}
+console.log("- 인코딩 여부:", isEncoded ? "인코딩됨" : "원본");
 
 // 실제 API 테스트
 async function testApiWithCurrentEnv() {
@@ -69,4 +71,4 @@ async function testApiWithCurrentEnv() {
   }
 }
 
-testApiWithCurrentEnv(); 
+testApiWithCurrentEnv();
