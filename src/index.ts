@@ -53,8 +53,6 @@ function logDebug(message: string, data?: any): void {
 if (process.env.NODE_ENV !== 'production') {
   logDebug("MCP 서버 환경변수 디버깅");
   logDebug("- KRA_SERVICE_KEY 존재", !!process.env.KRA_SERVICE_KEY);
-  logDebug("- KRA_SERVICE_KEY 길이", process.env.KRA_SERVICE_KEY?.length || 0);
-  logDebug("- KRA_SERVICE_KEY 앞 10자", process.env.KRA_SERVICE_KEY?.substring(0, 10));
 }
 
 // KRA API 설정 - 올바른 엔드포인트로 업데이트
@@ -139,14 +137,11 @@ export async function callKRAAPI299(endpoint: string, params: Record<string, str
 
   // 디버깅: API 키 상태 확인
   logDebug(`API299 호출 디버깅 - ${endpoint}`);
-  logDebug("API 키 길이", apiKey.length);
-  logDebug("API 키 앞부분", apiKey.substring(0, 15) + "...");
 
   // JSON 응답 타입 추가 및 serviceKey를 수동으로 추가하여 이중 인코딩 방지
   const searchParams = new URLSearchParams({...params, _type: 'json'});
   const url = `${KRA_API299_BASE_URL}${endpoint}?serviceKey=${apiKey}&${searchParams}`;
   
-  logDebug("요청 URL 길이", url.length);
   logDebug("파라미터", JSON.stringify(params));
   
   try {
@@ -198,14 +193,11 @@ export async function callKRAApi(endpoint: string, params: Record<string, string
 
   // 디버깅: API 키 상태 확인
   logDebug(`API 호출 디버깅 - ${endpoint}`);
-  logDebug("API 키 길이", apiKey.length);
-  logDebug("API 키 앞부분", apiKey.substring(0, 15) + "...");
 
   // JSON 응답 타입 추가 및 serviceKey를 수동으로 추가하여 이중 인코딩 방지
   const searchParams = new URLSearchParams({...params, _type: 'json'});
   const url = `${KRA_API_BASE_URL}${endpoint}?serviceKey=${apiKey}&${searchParams}`;
   
-  logDebug("요청 URL 길이", url.length);
   logDebug("파라미터", JSON.stringify(params));
   
   try {

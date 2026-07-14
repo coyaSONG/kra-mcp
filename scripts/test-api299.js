@@ -18,10 +18,11 @@ async function testAPI299() {
     });
     
     // 새로운 API299 Base URL 사용
-    const url = `https://apis.data.go.kr/B551015/API299/Race_Result_total?serviceKey=${apiKey}&${params}`;
+    const url = new URL('https://apis.data.go.kr/B551015/API299/Race_Result_total');
+    url.searchParams.set('serviceKey', apiKey);
+    params.forEach((value, key) => url.searchParams.set(key, value));
     
-    console.log('요청 URL 길이:', url.length);
-    console.log('API 키 길이:', apiKey.length);
+    console.log('API299 경주 결과 조회 테스트 시작...');
     
     const response = await fetch(url);
     console.log('응답 상태:', response.status);

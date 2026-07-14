@@ -21,10 +21,11 @@ async function testAPI12() {
     jk_name: '김용근'
   });
 
-  const url = `${baseUrl}?serviceKey=${apiKey}&${params}`;
+  const url = new URL(baseUrl);
+  url.searchParams.set('serviceKey', apiKey);
+  params.forEach((value, key) => url.searchParams.set(key, value));
   
   console.log('API12_1 기수정보 조회 테스트 시작...');
-  console.log('요청 URL:', url.replace(apiKey, '***SERVICE_KEY***'));
   
   try {
     const response = await fetch(url);
